@@ -1,7 +1,10 @@
 const dotenv = require("dotenv");
 
-// ✅ Load environment variables dynamically
-dotenv.config({ path: `.env.${process.env.NODE_ENV || "development"}` });
+// ✅ Ensure `NODE_ENV` is defined
+const ENV = process.env.NODE_ENV || "development";
+dotenv.config({ path: `.env.${ENV}` });
+
+console.log(`🟢 Server running in ${ENV} mode, using: .env.${ENV}`);
 
 const express = require("express");
 const cors = require("cors");
@@ -82,16 +85,16 @@ app.post(
   upload.fields([{ name: "file", maxCount: 1 }, { name: "image", maxCount: 1 }]),
   async (req, res) => {
     try {
-      if (!req.files || !req.files.file || !req.files.image) {
-        return res.status(400).json({ message: "Both file and image are required" });
+      const file = req.files?.file ? req.files.file[0].filename : null;
+      const image = req.files?.image ? req.files.image[0].filename : null;
+      if (!file && !image) {
+        return res.status(400).json({ message: "At least one file (ZIP or Image) is required" });
       }
-
-      console.log(`🔹 Uploading file: ${req.files.file[0].originalname}`);
-
+      console.log(`🔹 Uploading file: ${file || "No file uploaded"}`);
       return res.status(201).json({
         message: "File uploaded successfully",
-        fileUrl: `/uploads/${req.files.file[0].filename}`,
-        imageUrl: `/uploads/${req.files.image[0].filename}`,
+        fileUrl: file ? `/uploads/${file}` : null,
+        imageUrl: image ? `/uploads/${image}` : null,
       });
     } catch (error) {
       console.error("🚨 Upload Error:", error);
