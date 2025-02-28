@@ -1,12 +1,9 @@
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
-// ✅ Ensure correct `.env` file is loaded
-// dotenv.config({ path: `.env.${process.env.NODE_ENV || "development"}` });
-
-// ✅ Automatically load the correct .env file based on NODE_ENV
-const envFile = `/var/www/${process.env.NODE_ENV}-backend/.env.${process.env.NODE_ENV}`;
-
+// ✅ Ensure `NODE_ENV` is defined
+const ENV = process.env.NODE_ENV || "development";
+const envFile = `/var/www/${ENV}-backend/.env.${ENV}`;
 dotenv.config({ path: envFile });
 
 console.log(`🔹 Using environment file: ${envFile}`);
