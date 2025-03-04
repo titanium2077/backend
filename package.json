@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development nodemon server.js",
+    "dev": "nodemon server.js",
     "uat": "cross-env NODE_ENV=uat node server.js",
     "prod": "cross-env NODE_ENV=production node server.js"
   },

@@ -10,8 +10,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Ignore backend config files
-# config/db.js
-# server.js
+config/db.js
+server.js
 
 # Environment variables
 .env.development

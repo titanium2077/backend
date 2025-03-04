@@ -16,14 +16,14 @@ exports.register = async (req, res) => {
     if (user) return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    user = new User({ 
-      name, 
-      email, 
-      password: hashedPassword, 
-      role: email === process.env.ADMIN_EMAIL ? "admin" : "user", // ✅ Auto-assign admin role
-      allowedDevices: [], 
-      pendingDevices: [] // ✅ Initialize pending devices
+
+    user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      role: email === process.env.ADMIN_EMAIL ? "admin" : "user",
+      allowedDevices: [],
+      pendingDevices: [],
     });
 
     await user.save();
@@ -33,47 +33,50 @@ exports.register = async (req, res) => {
   }
 };
 
-// ✅ General Login Function (Used for Both Users & Admins)
+// ✅ General Login Function (Users & Admins)
 const loginUser = async (req, res, roleCheck = "user") => {
   try {
-    const { email, password } = req.body;
+    const { email, password, deviceToken } = req.body;
     const ipAddress = req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
     const userAgent = req.headers["user-agent"];
     const countryData = geoip.lookup(ipAddress);
     const country = countryData ? countryData.country : "Unknown";
 
+    console.log(`🔹 Login Attempt: Email=${email}, DeviceToken=${deviceToken}`);
+
     let user = await User.findOne({ email });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-    // ✅ Ensure correct login portal
     if (user.role !== roleCheck) {
+      console.warn(`🚨 Wrong Portal: Expected=${roleCheck}, Found=${user.role}`);
       return res.status(403).json({ message: `Access denied. Use /${user.role}/login instead.` });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-
-    // ✅ Check if user already has a device token
-    let deviceToken = req.cookies.deviceToken || user.deviceToken;
-
-    if (!deviceToken) {
-      deviceToken = uuidv4(); // ✅ Generate new device token if none exists
+    if (!isMatch) {
+      console.warn("🚨 Incorrect Password");
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    // ✅ Admin Login: Track Device Logins
-    if (user.role === "admin") {
-      if (!user.allowedDevices.includes(deviceToken)) {
-        console.log("🚨 Unauthorized Device", { deviceToken });
+    // ✅ Use existing deviceToken or generate a new one
+    let newDeviceToken = deviceToken || uuidv4();
 
-        // ✅ Store device for approval, but DO NOT block login
-        if (!user.pendingDevices) user.pendingDevices = [];
-        user.pendingDevices.push({ deviceToken, ipAddress, userAgent, country, approved: false });
+    // ✅ Store new device in `pendingDevices`, but DO NOT block login
+    const existingDevice = user.allowedDevices.includes(newDeviceToken);
+    if (!existingDevice) {
+      console.log("🔹 Storing new device:", { newDeviceToken });
+
+      const alreadyPending = user.pendingDevices.find((d) => d.deviceToken === newDeviceToken);
+      if (!alreadyPending) {
+        user.pendingDevices.push({ deviceToken: newDeviceToken, ipAddress, userAgent, country, approved: true });
       }
     }
 
+    console.log("✅ Login Successful!");
+
     // ✅ Save login record in `loginHistory`
     user.loginHistory.push({
-      deviceToken,
+      deviceToken: newDeviceToken,
       ipAddress,
       userAgent,
       country,
@@ -85,41 +88,35 @@ const loginUser = async (req, res, roleCheck = "user") => {
     user.ipAddress = ipAddress;
     user.userAgent = userAgent;
     user.country = country;
-    user.deviceToken = deviceToken;
+    user.deviceToken = newDeviceToken;
     await user.save();
 
     const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     // ✅ Set Secure Cookies
-    res.cookie("jwt", token, { 
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === "production", 
-      sameSite: "Strict", 
-      maxAge: 60 * 60 * 1000 
+    res.cookie("jwt", token, {
+      httpOnly: true, // 🔥 Prevent frontend JavaScript access
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax", // 🔥 Use Lax for cross-origin access
+      maxAge: 60 * 60 * 1000,
     });
 
-    res.cookie("deviceToken", deviceToken, { httpOnly: true, secure: true, sameSite: "Strict" });
-
+    // ✅ Ensure frontend can read token for debugging
     res.json({
       message: "Login successful",
+      token, // ✅ Also return token explicitly
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        country: user.country,
-        lastLogin: user.lastLogin,
-        ipAddress: user.ipAddress,
-        userAgent: user.userAgent,
-        deviceToken: deviceToken,
-        loginHistory: user.loginHistory, // ✅ Send login history
+        deviceToken: newDeviceToken,
       },
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 // ✅ Admin Login (Only for Admins)
 exports.adminLogin = async (req, res) => {
@@ -141,13 +138,21 @@ exports.logout = async (req, res) => {
 // ✅ Get Authenticated User Info (Protected Route)
 exports.getUser = async (req, res) => {
   try {
+    console.log("🔹 Cookies received:", req.cookies); // ✅ Debugging
+
     const token = req.cookies.jwt;
-    if (!token) return res.status(401).json({ message: "Unauthorized" });
+    if (!token) {
+      console.warn("🚨 No JWT token found.");
+      return res.status(401).json({ message: "Unauthorized. Please log in." });
+    }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select("-password");
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      console.warn("🚨 User not found.");
+      return res.status(401).json({ message: "User not found." });
+    }
 
     res.json({ user });
   } catch (error) {
