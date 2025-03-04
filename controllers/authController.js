@@ -95,9 +95,10 @@ const loginUser = async (req, res, roleCheck = "user") => {
 
     // ✅ Set Secure Cookies
     res.cookie("jwt", token, {
-      httpOnly: true, // 🔥 Prevent frontend JavaScript access
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "Lax", // 🔥 Use Lax for cross-origin access
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",  // ✅ Only secure in production
+      sameSite: "Lax",  // ✅ Works better for subdomains
+      domain: "kawaiee.xyz",  // ✅ Use exact domain instead of `.` prefix
       maxAge: 60 * 60 * 1000,
     });
 
