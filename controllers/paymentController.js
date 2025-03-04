@@ -10,9 +10,9 @@ paypal.configure({
 
 // ✅ Define One-Time Purchase Plans
 const storagePlans = {
-  small: { price: 9.99, downloadLimit: 50 },  // 50GB for $9.99
-  medium: { price: 14.99, downloadLimit: 200 }, // 200GB for $14.99
-  large: { price: 19.99, downloadLimit: 500 }, // 500GB for $19.99
+  small: { price: 9.99, downloadLimit: 10 },  // 10GB for $9.99
+  medium: { price: 14.99, downloadLimit: 15 }, // 15GB for $14.99
+  large: { price: 19.99, downloadLimit: 20 }, // 20GB for $19.99
 };
 
 // ✅ Create a PayPal Payment for One-Time Storage Purchase

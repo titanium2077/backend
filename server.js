@@ -1,10 +1,5 @@
 const dotenv = require("dotenv");
-
-// ✅ Ensure `NODE_ENV` is defined
-const ENV = process.env.NODE_ENV || "development";
-dotenv.config({ path: `.env.${ENV}` });
-
-console.log(`🟢 Server running in ${ENV} mode, using: .env.${ENV}`);
+dotenv.config(); // ✅ Load .env file
 
 const express = require("express");
 const cors = require("cors");
@@ -14,15 +9,17 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 
+// ✅ Routes
 const authRoutes = require("./routes/authRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const feedRoutes = require("./routes/feedRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const profileRoutes = require("./routes/profileRoutes");
-
 const { authMiddleware, adminMiddleware } = require("./middleware/authMiddleware");
 
+// ✅ Initialize Express App
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 // ✅ Ensure Upload Directory Exists
 const UPLOADS_DIR = path.join(__dirname, process.env.UPLOADS_DIR || "uploads");
@@ -30,34 +27,38 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// ✅ Connect to MongoDB before starting the server
+// ✅ Connect to MongoDB
 connectDB();
 
 // ✅ CORS Configuration
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: process.env.FRONTEND_URL, // ✅ Allow frontend
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "x-requested-with", // ✅ Allow this header
+    ],
   })
 );
 
+app.use(cookieParser());
 // ✅ Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Ensure form-data works
-app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
 
-// ✅ Serve uploaded files directly
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ✅ Serve uploaded files
+app.use("/uploads", express.static(UPLOADS_DIR));
 
-// ✅ Routes
+// ✅ API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/profile", authMiddleware, profileRoutes);
 app.use("/api/admin", authMiddleware, adminMiddleware, adminRoutes);
 
-// ✅ Configure Multer for Uploading Files
+// ✅ File Upload Configuration
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -67,7 +68,7 @@ const upload = multer({
       cb(null, `${Date.now()}_${file.originalname}`);
     },
   }),
-  limits: { fileSize: 50 * 1024 * 1024 }, // ✅ Max File Size: 50MB
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === "application/zip" || file.mimetype.startsWith("image/")) {
       cb(null, true);
@@ -77,7 +78,7 @@ const upload = multer({
   },
 });
 
-// ✅ Admin File Upload Route (ZIP & Images)
+// ✅ Admin File Upload Route
 app.post(
   "/api/admin/upload",
   authMiddleware,
@@ -103,12 +104,11 @@ app.post(
   }
 );
 
-// ✅ Error Handling
+// ✅ Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error("🚨 Error:", err);
   res.status(500).json({ message: "Internal Server Error" });
 });
 
 // ✅ Start Server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
