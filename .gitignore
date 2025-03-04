@@ -14,6 +14,7 @@ config/db.js
 server.js
 
 # Environment variables
+.env
 .env.development
 .env.uat
 .env.production

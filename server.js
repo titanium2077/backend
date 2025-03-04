@@ -31,14 +31,25 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 connectDB();
 
 // ✅ CORS Configuration
+const allowedOrigins = [
+  "https://kawaiee.xyz",
+  "https://uat.kawaiee.xyz"
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // ✅ Allow frontend
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
     allowedHeaders: [
       "Content-Type",
       "Authorization",
-      "x-requested-with", // ✅ Allow this header
+      "x-requested-with"
     ],
   })
 );
