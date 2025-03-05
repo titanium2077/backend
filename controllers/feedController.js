@@ -10,7 +10,6 @@ dotenv.config();
 
 const UPLOADS_DIR = path.join(__dirname, "..", process.env.UPLOADS_DIR || "uploads");
 const BASE_URL = process.env.BASE_URL || "https://miamiachan.com";
-const DOWNLOAD_EXPIRY = 5 * 60; // 5 minutes expiry time
 
 // ✅ Ensure Uploads Directory Exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -201,17 +200,19 @@ exports.deleteFeedItem = async (req, res) => {
   }
 };
 
-// ✅ Generate Secure Download Link
+// ✅ Generate Secure Download Link (Authenticated Users Only)
 exports.generateDownloadLink = async (req, res) => {
   try {
-    console.log("📥 Generating secure download link...");
+    console.log("📥 Generating direct download link...");
+    console.log("🔹 Request Params:", req.params);
+    console.log("🔹 Query Params:", req.query);
 
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized. Please log in." });
     }
 
-    const { id } = req.params;
-    if (!id) {
+    if (!req.params.id) {
+      console.error("🚨 ERROR: Missing file ID in request.");
       return res.status(400).json({ message: "File ID is required" });
     }
 
@@ -220,104 +221,66 @@ exports.generateDownloadLink = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const feedItem = await FeedItem.findById(id);
+    const feedItem = await FeedItem.findById(req.params.id);
     if (!feedItem) {
-      return res.status(404).json({ message: "File not found" });
+      console.error("🚨 ERROR: Feed item not found in database.");
+      return res.status(404).json({ message: "Item not found" });
     }
 
     console.log("✅ Found Feed Item:", feedItem);
 
-    // ✅ Check if user has enough quota
+    // ✅ Construct the full file path
+    const filePath = path.join(UPLOADS_DIR, feedItem.storageKey.replace(/^\/uploads\//, ""));
+    console.log("📂 Checking File Path:", filePath);
+
+    // ✅ Check if the file actually exists
+    if (!fs.existsSync(filePath)) {
+      console.error("🚨 ERROR: File not found on server!");
+      return res.status(404).json({ message: "File not found on server. Please contact support." });
+    }
+
+    console.log("✅ SUCCESS: File exists. Proceeding with download...");
+
+    // ✅ Convert file size from MB to GB
     const fileSizeMB = parseFloat(feedItem.fileSize);
     const fileSizeGB = fileSizeMB / 1024;
 
+    console.log(`📏 File Size: ${fileSizeMB} MB (${fileSizeGB.toFixed(4)} GB)`);
+    console.log(`🔹 User's Available Limit: ${user.downloadLimit} GB`);
+
+    // ✅ Check if user has enough quota
     if (user.downloadLimit < fileSizeGB) {
+      console.error("⚠️ ERROR: User does not have enough download limit.");
       return res.status(403).json({ message: "Not enough download limit. Please purchase more storage." });
     }
 
     console.log("✅ User has enough download limit. Deducting...");
+
+    // ✅ Deduct the user's download limit (Only if file exists)
     user.downloadLimit -= fileSizeGB;
     user.totalDownloads += fileSizeGB;
+
+    // ✅ Log Download in User's History
+    user.downloadedFiles.push({
+      fileId: feedItem._id,
+      fileSize: fileSizeMB, // Store size in MB
+      downloadDate: new Date(),
+    });
+
     await user.save();
 
-    console.log("✅ Updated user quota. New limit:", user.downloadLimit);
-
-    // ✅ Generate Secure Token (Valid for 5 minutes)
-    const tokenPayload = {
-      filePath: feedItem.storageKey,
-      fileName: path.basename(feedItem.storageKey),
-      userId: user._id,
-      exp: Math.floor(Date.now() / 1000) + DOWNLOAD_EXPIRY, // Expiry time (5 min)
-    };
-
-    const secureToken = jwt.sign(tokenPayload, process.env.JWT_SECRET);
-    const secureDownloadUrl = `${BASE_URL}/secure-download/${secureToken}`;
-
-    console.log("✅ Secure Download URL:", secureDownloadUrl);
+    // ✅ Generate Direct File URL
+    const directDownloadUrl = `${BASE_URL}${feedItem.storageKey}`;
+    console.log("✅ Direct Download Link Generated:", directDownloadUrl);
 
     res.json({
-      downloadUrl: secureDownloadUrl,
-      message: "Download link generated successfully",
+      downloadUrl: directDownloadUrl,
+      message: "Download successful",
       remainingQuota: user.downloadLimit,
     });
 
   } catch (error) {
     console.error("🚨 ERROR in `generateDownloadLink`:", error);
     res.status(500).json({ message: "Error generating download link", error: error.message });
-  }
-};
-
-// ✅ Secure File Download (Single Endpoint)
-exports.secureFileDownload = async (req, res) => {
-  try {
-    console.log("🔒 [SECURE DOWNLOAD] Validating token...");
-
-    const { token } = req.params; // Token is in URL like /secure-download/TOKEN
-    if (!token) {
-      return res.status(400).json({ message: "Missing download token" });
-    }
-
-    // ✅ Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      console.error("🚨 ERROR: Invalid or expired token:", err.message);
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-
-    console.log("✅ Token Verified:", decoded);
-
-    // ✅ Construct absolute file path
-    const sanitizedFileName = path.basename(decoded.fileName);
-    const filePath = path.join(UPLOADS_DIR, sanitizedFileName);
-
-    console.log("📂 Checking File Path:", filePath);
-
-    if (!fs.existsSync(filePath)) {
-      console.error("🚨 ERROR: File not found on server!", filePath);
-      return res.status(404).json({ message: "File not found on server. Please contact support." });
-    }
-
-    console.log("✅ File exists. Streaming file:", filePath);
-
-    // ✅ Set Headers for Secure Download
-    res.setHeader("Content-Disposition", `attachment; filename="${sanitizedFileName}"`);
-    res.setHeader("Content-Type", "application/octet-stream");
-
-    // ✅ Stream the file to the user
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.on("error", (err) => {
-      console.error("🚨 ERROR: File stream error", err);
-      return res.status(500).json({ message: "Error streaming file" });
-    });
-
-    fileStream.pipe(res);
-
-    console.log("✅ File streaming started...");
-
-  } catch (error) {
-    console.error("🚨 ERROR in `secureFileDownload`:", error);
-    res.status(500).json({ message: "Error processing download", error: error.message });
   }
 };
