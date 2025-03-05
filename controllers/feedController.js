@@ -278,7 +278,7 @@ exports.generateDownloadLink = async (req, res) => {
 // ✅ Serve the file securely via the generated token
 exports.secureFileDownload = async (req, res) => {
   try {
-    console.log("🔒 Validating secure download token...");
+    console.log("🔒 [SECURE DOWNLOAD] Validating token...");
 
     const { token } = req.query;
     if (!token) {
@@ -297,29 +297,39 @@ exports.secureFileDownload = async (req, res) => {
 
     console.log("✅ Token Verified:", decoded);
 
-    // ✅ Validate file path
-    if (!decoded.filePath) {
-      console.error("🚨 ERROR: Invalid token payload. Missing file path.");
-      return res.status(400).json({ message: "Invalid token: Missing file path" });
+    // ✅ Validate token payload
+    if (!decoded.filePath || !decoded.userId) {
+      console.error("🚨 ERROR: Invalid token payload. Missing filePath or userId.");
+      return res.status(400).json({ message: "Invalid token: Missing filePath or userId" });
     }
 
-    // ✅ Construct the absolute file path
-    const filePath = path.join(UPLOADS_DIR, path.basename(decoded.filePath));
+    console.log(`🔹 Decoded Token Payload:`, decoded);
+
+    // ✅ Construct absolute file path
+    const sanitizedFileName = path.basename(decoded.filePath); // Remove directory traversal attempts
+    const filePath = path.join(UPLOADS_DIR, sanitizedFileName);
+
     console.log("📂 Checking File Path:", filePath);
 
     if (!fs.existsSync(filePath)) {
-      console.error("🚨 ERROR: File not found on server!");
+      console.error("🚨 ERROR: File not found on server!", filePath);
       return res.status(404).json({ message: "File not found on server. Please contact support." });
     }
 
     console.log("✅ File exists. Preparing to stream:", filePath);
 
     // ✅ Set Headers for Secure Download
-    res.setHeader("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${sanitizedFileName}"`);
     res.setHeader("Content-Type", "application/octet-stream");
 
     // ✅ Stream the file to the user
     const fileStream = fs.createReadStream(filePath);
+
+    fileStream.on("error", (err) => {
+      console.error("🚨 ERROR: File stream error", err);
+      return res.status(500).json({ message: "Error streaming file" });
+    });
+
     fileStream.pipe(res);
 
     console.log("✅ File streaming started...");
