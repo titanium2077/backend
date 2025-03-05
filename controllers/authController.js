@@ -115,7 +115,7 @@ const loginUser = async (req, res, roleCheck = "user") => {
       httpOnly: true,  
       secure: true,  // ✅ Required for HTTPS
       sameSite: "None",  // ✅ Allows cross-origin requests
-      domain: ".kawaiee.xyz",  // ✅ Applies to subdomains
+      domain: ".miamiachan.com",  // ✅ Applies to subdomains
       path: "/",  
       maxAge: 60 * 60 * 1000,  // ✅ 1 hour expiration
     });    
