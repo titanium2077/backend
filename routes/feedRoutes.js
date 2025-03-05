@@ -5,9 +5,8 @@ const {
   createFeed,
   updateFeedItem,
   deleteFeedItem,
-  generateSecureDownloadToken,
-  verifySecureDownload,
-  startFileDownload,
+  generateDownloadLink,
+  secureFileDownload,
 } = require("../controllers/feedController");
 
 const { authMiddleware, adminMiddleware } = require("../middleware/authMiddleware");
@@ -25,8 +24,8 @@ router.put("/:id", authMiddleware, adminMiddleware, upload, updateFeedItem);
 router.delete("/:id", authMiddleware, adminMiddleware, deleteFeedItem);
 
 // ✅ Secure Download Routes
-router.get("/download/:id", authMiddleware, generateSecureDownloadToken);
-router.get("/secure-download", verifySecureDownload);
-router.get("/start-download", startFileDownload);
+// ✅ Secure Download Route
+router.get("/download/:id", authMiddleware, generateDownloadLink); 
+router.get("/secure-download/:token", secureFileDownload); 
 
 module.exports = router;
