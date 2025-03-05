@@ -201,16 +201,17 @@ exports.deleteFeedItem = async (req, res) => {
   }
 };
 
-// ✅ Generate a Secure Download Link
-exports.generateSecureDownloadToken = async (req, res) => {
+// ✅ Generate Secure Download Link
+exports.generateDownloadLink = async (req, res) => {
   try {
-    console.log("📥 Generating secure download token...");
+    console.log("📥 Generating secure download link...");
 
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized. Please log in." });
     }
 
-    if (!req.params.id) {
+    const { id } = req.params;
+    if (!id) {
       return res.status(400).json({ message: "File ID is required" });
     }
 
@@ -219,14 +220,14 @@ exports.generateSecureDownloadToken = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const feedItem = await FeedItem.findById(req.params.id);
+    const feedItem = await FeedItem.findById(id);
     if (!feedItem) {
       return res.status(404).json({ message: "File not found" });
     }
 
     console.log("✅ Found Feed Item:", feedItem);
 
-    // ✅ Check if the user has enough quota
+    // ✅ Check if user has enough quota
     const fileSizeMB = parseFloat(feedItem.fileSize);
     const fileSizeGB = fileSizeMB / 1024;
 
@@ -241,86 +242,42 @@ exports.generateSecureDownloadToken = async (req, res) => {
 
     console.log("✅ Updated user quota. New limit:", user.downloadLimit);
 
-    // ✅ Generate Secure JWT Token
+    // ✅ Generate Secure Token (Valid for 5 minutes)
     const tokenPayload = {
       filePath: feedItem.storageKey,
       fileName: path.basename(feedItem.storageKey),
-      fileSize: feedItem.fileSize,
       userId: user._id,
       exp: Math.floor(Date.now() / 1000) + DOWNLOAD_EXPIRY, // Expiry time (5 min)
     };
 
-    const downloadToken = jwt.sign(tokenPayload, process.env.JWT_SECRET);
-    const secureDownloadUrl = `${BASE_URL}/api/feed/secure-download?token=${downloadToken}`;
+    const secureToken = jwt.sign(tokenPayload, process.env.JWT_SECRET);
+    const secureDownloadUrl = `${BASE_URL}/secure-download/${secureToken}`;
 
-    console.log("✅ Secure Download Token Generated:", secureDownloadUrl);
+    console.log("✅ Secure Download URL:", secureDownloadUrl);
 
     res.json({
-      downloadToken,
-      secureDownloadUrl,
+      downloadUrl: secureDownloadUrl,
       message: "Download link generated successfully",
       remainingQuota: user.downloadLimit,
     });
 
   } catch (error) {
-    console.error("🚨 ERROR in `generateSecureDownloadToken`:", error);
-    res.status(500).json({ message: "Error generating download token", error: error.message });
+    console.error("🚨 ERROR in `generateDownloadLink`:", error);
+    res.status(500).json({ message: "Error generating download link", error: error.message });
   }
 };
 
-// ✅ Serve the file securely via the generated token
-exports.verifySecureDownload = async (req, res) => {
+// ✅ Secure File Download (Single Endpoint)
+exports.secureFileDownload = async (req, res) => {
   try {
     console.log("🔒 [SECURE DOWNLOAD] Validating token...");
 
-    const { token } = req.query;
+    const { token } = req.params; // Token is in URL like /secure-download/TOKEN
     if (!token) {
-      console.error("🚨 ERROR: Missing download token.");
       return res.status(400).json({ message: "Missing download token" });
     }
 
     // ✅ Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      console.error("🚨 ERROR: Invalid or expired token:", err.message);
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-
-    console.log("✅ Token Verified:", decoded);
-
-    // ✅ Check if all required fields exist
-    if (!decoded.filePath || !decoded.fileName || !decoded.userId) {
-      console.error("🚨 ERROR: Invalid token payload. Missing filePath, fileName, or userId.");
-      return res.status(400).json({ message: "Invalid token: Missing filePath, fileName, or userId" });
-    }
-
-    console.log("🔹 Decoded Token Payload:", decoded);
-
-    res.json({
-      message: "Token verified",
-      fileName: decoded.fileName,
-      fileSize: decoded.fileSize,
-      downloadUrl: `${BASE_URL}/api/feed/start-download?token=${token}`
-    });
-
-  } catch (error) {
-    console.error("🚨 ERROR in `verifySecureDownload`:", error);
-    res.status(500).json({ message: "Error verifying download token", error: error.message });
-  }
-};
-
-exports.startFileDownload = async (req, res) => {
-  try {
-    console.log("🎯 Starting file download...");
-
-    const { token } = req.query;
-    if (!token) {
-      return res.status(400).json({ message: "Missing download token" });
-    }
-
-    // ✅ Verify token again
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -360,7 +317,7 @@ exports.startFileDownload = async (req, res) => {
     console.log("✅ File streaming started...");
 
   } catch (error) {
-    console.error("🚨 ERROR in `startFileDownload`:", error);
+    console.error("🚨 ERROR in `secureFileDownload`:", error);
     res.status(500).json({ message: "Error processing download", error: error.message });
   }
 };
