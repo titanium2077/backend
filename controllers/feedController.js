@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const dotenv = require("dotenv");
 const User = require("../models/User");
+const jwt = require("jsonwebtoken");
 
 dotenv.config();
 
