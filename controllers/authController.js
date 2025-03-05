@@ -112,14 +112,13 @@ const loginUser = async (req, res, roleCheck = "user") => {
 
     // ✅ Set Secure Cookie for Cross-Origin Authentication
     res.cookie("jwt", token, {
-      httpOnly: true,  
-      secure: true,  // ✅ Required for HTTPS
-      sameSite: "None",  // ✅ Allows cross-origin requests
-      domain: ".miamiachan.com",  // ✅ Applies to subdomains
-      path: "/",  
-      maxAge: 60 * 60 * 1000,  // ✅ 1 hour expiration
-    });    
-
+      httpOnly: true,
+      secure: true, // ✅ Required for HTTPS
+      sameSite: "None", // ✅ Allows cross-origin requests
+      path: "/", // ✅ Ensures cookie is available site-wide
+      maxAge: 60 * 60 * 1000, // ✅ 1 hour expiration
+    });
+        
     console.log("✅ JWT Token Stored in Cookie");
 
     res.json({
