@@ -275,6 +275,7 @@ exports.verifySecureDownload = async (req, res) => {
 
     const { token } = req.query;
     if (!token) {
+      console.error("🚨 ERROR: Missing download token.");
       return res.status(400).json({ message: "Missing download token" });
     }
 
@@ -283,21 +284,30 @@ exports.verifySecureDownload = async (req, res) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
+      console.error("🚨 ERROR: Invalid or expired token:", err.message);
       return res.status(403).json({ message: "Invalid or expired token" });
     }
 
     console.log("✅ Token Verified:", decoded);
 
+    // ✅ Check if all required fields exist
+    if (!decoded.filePath || !decoded.fileName || !decoded.userId) {
+      console.error("🚨 ERROR: Invalid token payload. Missing filePath, fileName, or userId.");
+      return res.status(400).json({ message: "Invalid token: Missing filePath, fileName, or userId" });
+    }
+
+    console.log("🔹 Decoded Token Payload:", decoded);
+
     res.json({
       message: "Token verified",
       fileName: decoded.fileName,
       fileSize: decoded.fileSize,
-      downloadUrl: `${BASE_URL}/api/feed/start-download?token=${token}`,
+      downloadUrl: `${BASE_URL}/api/feed/start-download?token=${token}`
     });
 
   } catch (error) {
     console.error("🚨 ERROR in `verifySecureDownload`:", error);
-    res.status(500).json({ message: "Error verifying download token" });
+    res.status(500).json({ message: "Error verifying download token", error: error.message });
   }
 };
 
@@ -315,18 +325,20 @@ exports.startFileDownload = async (req, res) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
+      console.error("🚨 ERROR: Invalid or expired token:", err.message);
       return res.status(403).json({ message: "Invalid or expired token" });
     }
 
     console.log("✅ Token Verified:", decoded);
 
     // ✅ Construct absolute file path
-    const sanitizedFileName = path.basename(decoded.filePath);
+    const sanitizedFileName = path.basename(decoded.fileName);
     const filePath = path.join(UPLOADS_DIR, sanitizedFileName);
 
     console.log("📂 Checking File Path:", filePath);
 
     if (!fs.existsSync(filePath)) {
+      console.error("🚨 ERROR: File not found on server!", filePath);
       return res.status(404).json({ message: "File not found on server. Please contact support." });
     }
 
