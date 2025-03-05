@@ -207,20 +207,24 @@ exports.generateDownloadLink = async (req, res) => {
     console.log("📥 Generating secure download link...");
 
     if (!req.user) {
+      console.warn("🚨 ERROR: Unauthorized. No user found.");
       return res.status(401).json({ message: "Unauthorized. Please log in." });
     }
 
     if (!req.params.id) {
+      console.error("🚨 ERROR: Missing file ID in request.");
       return res.status(400).json({ message: "File ID is required" });
     }
 
     const user = await User.findById(req.user._id);
     if (!user) {
+      console.warn("🚨 ERROR: User not found in database.");
       return res.status(404).json({ message: "User not found" });
     }
 
     const feedItem = await FeedItem.findById(req.params.id);
     if (!feedItem) {
+      console.warn("🚨 ERROR: File not found in database.");
       return res.status(404).json({ message: "File not found" });
     }
 
@@ -229,7 +233,12 @@ exports.generateDownloadLink = async (req, res) => {
     // ✅ Check if the user has enough quota
     const fileSizeMB = parseFloat(feedItem.fileSize);
     const fileSizeGB = fileSizeMB / 1024;
+
+    console.log(`📏 File Size: ${fileSizeMB} MB (${fileSizeGB.toFixed(4)} GB)`);
+    console.log(`🔹 User's Available Limit: ${user.downloadLimit} GB`);
+
     if (user.downloadLimit < fileSizeGB) {
+      console.error("⚠️ ERROR: User does not have enough download limit.");
       return res.status(403).json({ message: "Not enough download limit. Please purchase more storage." });
     }
 
@@ -240,11 +249,13 @@ exports.generateDownloadLink = async (req, res) => {
     user.totalDownloads += fileSizeGB;
     await user.save();
 
+    console.log("✅ Updated user quota. New limit:", user.downloadLimit);
+
     // ✅ Generate a signed JWT token for secure download
     const tokenPayload = {
       filePath: feedItem.storageKey,
       userId: user._id,
-      exp: Math.floor(Date.now() / 1000) + DOWNLOAD_EXPIRY, // Expiry time
+      exp: Math.floor(Date.now() / 1000) + DOWNLOAD_EXPIRY, // Expiry time (5 min)
     };
 
     const downloadToken = jwt.sign(tokenPayload, process.env.JWT_SECRET);
@@ -271,6 +282,7 @@ exports.secureFileDownload = async (req, res) => {
 
     const { token } = req.query;
     if (!token) {
+      console.error("🚨 ERROR: Missing download token.");
       return res.status(400).json({ message: "Missing download token" });
     }
 
@@ -279,21 +291,39 @@ exports.secureFileDownload = async (req, res) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
+      console.error("🚨 ERROR: Invalid or expired token:", err.message);
       return res.status(403).json({ message: "Invalid or expired token" });
     }
 
     console.log("✅ Token Verified:", decoded);
 
-    const filePath = path.join(UPLOADS_DIR, decoded.filePath.replace(/^\/uploads\//, ""));
+    // ✅ Validate file path
+    if (!decoded.filePath) {
+      console.error("🚨 ERROR: Invalid token payload. Missing file path.");
+      return res.status(400).json({ message: "Invalid token: Missing file path" });
+    }
+
+    // ✅ Construct the absolute file path
+    const filePath = path.join(UPLOADS_DIR, path.basename(decoded.filePath));
     console.log("📂 Checking File Path:", filePath);
 
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found" });
+      console.error("🚨 ERROR: File not found on server!");
+      return res.status(404).json({ message: "File not found on server. Please contact support." });
     }
 
-    console.log("✅ Streaming file:", filePath);
+    console.log("✅ File exists. Preparing to stream:", filePath);
 
-    res.download(filePath);
+    // ✅ Set Headers for Secure Download
+    res.setHeader("Content-Disposition", `attachment; filename="${path.basename(filePath)}"`);
+    res.setHeader("Content-Type", "application/octet-stream");
+
+    // ✅ Stream the file to the user
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+    console.log("✅ File streaming started...");
+
   } catch (error) {
     console.error("🚨 ERROR in `secureFileDownload`:", error);
     res.status(500).json({ message: "Error processing download", error: error.message });
