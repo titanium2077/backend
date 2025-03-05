@@ -1,6 +1,5 @@
 const dotenv = require("dotenv");
 dotenv.config(); // ✅ Load .env file
-
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -20,6 +19,7 @@ const { authMiddleware, adminMiddleware } = require("./middleware/authMiddleware
 // ✅ Initialize Express App
 const app = express();
 const PORT = process.env.PORT || 5000;
+app.use(cookieParser());
 
 // ✅ Ensure Upload Directory Exists
 const UPLOADS_DIR = path.join(__dirname, process.env.UPLOADS_DIR || "uploads");
@@ -31,19 +31,17 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 connectDB();
 
 // ✅ CORS Configuration
+// ✅ CORS Configuration
+const allowedOrigins = ["https://kawaiee.xyz", "https://uat.kawaiee.xyz"];
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // ✅ Allow frontend
-    credentials: true,
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "x-requested-with", // ✅ Allow this header
-    ],
+    origin: allowedOrigins,
+    credentials: true, // ✅ Allows frontend to send cookies
+    methods: ["GET", "POST", "PUT", "DELETE"], // ✅ Allow all API methods
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-app.use(cookieParser());
 // ✅ Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
