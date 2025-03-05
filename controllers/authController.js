@@ -113,12 +113,12 @@ const loginUser = async (req, res, roleCheck = "user") => {
     // ✅ Set Secure Cookie for Cross-Origin Authentication
     res.cookie("jwt", token, {
       httpOnly: true,
-      secure: true, // ✅ Required for HTTPS
-      sameSite: "None", // ✅ Allows cross-origin requests
-      path: "/", // ✅ Ensures cookie is available site-wide
+      secure: process.env.COOKIE_SECURE === "true",
+      sameSite: process.env.COOKIE_SAME_SITE || "None", 
+      path: "/",
       maxAge: 60 * 60 * 1000, // ✅ 1 hour expiration
-    });
-        
+    });    
+    
     console.log("✅ JWT Token Stored in Cookie");
 
     res.json({
