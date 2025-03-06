@@ -31,13 +31,14 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 connectDB();
 
 // ✅ CORS Configuration
-const allowedOrigins = process.env.CORS_ORIGIN || "https://kawaiee.xyz";
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",") || ["https://kawaiee.xyz"]; 
+
 app.use(
   cors({
     origin: allowedOrigins,
-    credentials: true, 
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"], // ✅ Added X-Requested-With
   })
 );
 
