@@ -7,10 +7,8 @@ const authMiddleware = async (req, res, next) => {
     console.log("🔹 Cookies received:", req.cookies);
     console.log("🔹 Authorization Header:", req.headers.authorization);
 
-    // ✅ Try getting JWT from Cookie or Authorization Header
-    let token =
-      req.cookies?.jwt || req.headers.authorization?.split(" ")[1];
-
+    // ✅ Get JWT from Cookie or Authorization Header
+    let token = req.headers.authorization?.split(" ")[1] || req.cookies?.jwt;
     console.log("🔹 Extracted Token:", token ? "✔ Yes" : "❌ No");
 
     if (!token) {
@@ -30,23 +28,30 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: "User not found." });
     }
 
-    // ✅ Attach user to request object
+    // ✅ Attach user to request
     req.user = user;
 
-    // ✅ Validate Device Token (Optional Check)
-    const deviceToken = req.cookies?.deviceToken;
+    // ✅ Validate Device Token (for added security)
+    const deviceToken = req.cookies?.deviceToken || req.headers["x-device-token"];
+    
     if (deviceToken) {
       console.log("🔹 Device Token Found:", deviceToken);
+
+      if (!user.deviceToken) {
+        console.warn("⚠️ User has no registered device token.");
+        return res.status(403).json({ message: "Device not registered. Please reauthenticate." });
+      }
+
       if (deviceToken !== user.deviceToken) {
         console.warn(`⚠️ Device Mismatch: Expected ${user.deviceToken}, got ${deviceToken}`);
         return res.status(403).json({ message: "Unauthorized device. Please log in again." });
       }
     } else {
-      console.warn("⚠️ No device token found in cookies.");
+      console.warn("⚠️ No device token found in cookies or headers.");
     }
 
     console.log("✅ Authentication Passed");
-    next(); // ✅ Continue if all checks pass
+    next(); // Continue to the next middleware
   } catch (error) {
     console.error("🚨 Authentication Error:", error.message);
     res.status(401).json({ message: "Invalid or expired token" });
