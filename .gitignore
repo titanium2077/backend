@@ -21,3 +21,6 @@ server.js
 
 # Build files
 dist/
+
+# Ignore file uploads directory
+uploads/
