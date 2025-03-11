@@ -15,6 +15,7 @@ const feedRoutes = require("./routes/feedRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const { authMiddleware, adminMiddleware } = require("./middleware/authMiddleware");
+const supportRoutes = require("./routes/supportRoutes");
 
 // ✅ Initialize Express App
 const app = express();
@@ -60,6 +61,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/profile", authMiddleware, profileRoutes);
 app.use("/api/admin", authMiddleware, adminMiddleware, adminRoutes);
+app.use("/api/support", authMiddleware, supportRoutes);
 
 // ✅ File Upload Configuration
 const upload = multer({
