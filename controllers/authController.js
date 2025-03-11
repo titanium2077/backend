@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const FeedItem = require("../models/FeedItem"); // ✅ Import FeedItem model
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const geoip = require("geoip-lite");
@@ -21,12 +22,21 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
     
-    let user = await User.findOne({ email });
-    if (user) return res.status(400).json({ message: "User already exists" });
+    // ✅ Check if username already exists
+    let existingUser = await User.findOne({ name });
+    if (existingUser) {
+      return res.status(400).json({ message: "Username already taken. Please try another." });
+    }
+
+    // ✅ Check if email already exists
+    existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User with this email already exists" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    user = new User({
+    const user = new User({
       name,
       email,
       password: hashedPassword,
@@ -164,26 +174,45 @@ exports.logout = async (req, res) => {
 exports.getUser = async (req, res) => {
   try {
     console.log("🟢 GET USER INFO REQUEST RECEIVED");
-    console.log("🔹 Cookies received:", req.cookies);
 
     const token = req.cookies.jwt || req.headers.authorization?.split(" ")[1]; // ✅ Supports both Cookie & Bearer token
-
-    if (!token) {
-      console.warn("🚨 No JWT token found.");
-      return res.status(401).json({ message: "Unauthorized. Please log in." });
-    }
+    if (!token) return res.status(401).json({ message: "Unauthorized. Please log in." });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log("✅ Token Decoded:", decoded);
 
     const user = await User.findById(decoded.userId).select("-password");
-    if (!user) {
-      console.warn("🚨 User not found.");
-      return res.status(401).json({ message: "User not found." });
-    }
+    if (!user) return res.status(401).json({ message: "User not found." });
 
     console.log("✅ User Found:", user.email);
-    res.json({ user });
+
+    // ✅ Fetch Transactions (Last 5)
+    const transactions = user.paymentHistory.sort((a, b) => b.date - a.date).slice(0, 5);
+
+    // ✅ Fetch Download History (Last 5) and Populate File Names
+    const downloads = await Promise.all(
+      user.downloadedFiles
+        .sort((a, b) => b.downloadDate - a.downloadDate)
+        .slice(0, 5)
+        .map(async (download) => {
+          const feedItem = await FeedItem.findById(download.fileId);
+          return {
+            _id: download._id,
+            fileId: download.fileId,
+            fileName: feedItem ? feedItem.title : "Unknown File",
+            fileSize: download.fileSize,
+            downloadDate: download.downloadDate,
+          };
+        })
+    );
+
+    res.json({
+      user,
+      transactions,
+      downloads,
+    });
+
+    console.log("✅ User Profile Sent Successfully!");
   } catch (error) {
     console.error("🚨 Error in getUser:", error);
     res.status(401).json({ message: "Invalid token" });
