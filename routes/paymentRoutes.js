@@ -1,13 +1,13 @@
 const express = require("express");
-const { createPayment, verifyPayment } = require("../controllers/paymentController");
+const { createCryptoPayment, verifyCryptoPayment } = require("../controllers/paymentController");
 const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// ✅ Create PayPal Payment
-router.post("/paypal-payment", authMiddleware, createPayment);
+// ✅ Create Crypto Payment (BTC, USDT)
+router.post("/crypto-payment", authMiddleware, createCryptoPayment);
 
-// ✅ Verify PayPal Payment
-router.get("/paypal-verify", authMiddleware, verifyPayment);
+// ✅ Verify Crypto Payment
+router.get("/crypto-verify", authMiddleware, verifyCryptoPayment);
 
 module.exports = router;
