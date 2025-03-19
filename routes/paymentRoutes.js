@@ -4,7 +4,7 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-// ✅ Create Crypto Payment (BTC, USDT)
+// ✅ Create Crypto Payment (BTC, LTC, DOGE)
 router.post("/crypto-payment", authMiddleware, createCryptoPayment);
 
 // ✅ Verify Crypto Payment
